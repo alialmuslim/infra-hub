@@ -35,6 +35,8 @@ import {
   SmartAlertsModal,
   RunbookGeneratorModal,
 } from "@/components/AIFeatures";
+import { TicketDetailModal } from "@/components/TicketDetailModal";
+import { InfrastructureDetailModal } from "@/components/InfrastructureDetailModal";
 
 const ProgressRing = ({ value, label, color, size = 48 }) => {
   const radius = 20;
@@ -121,6 +123,7 @@ const SoftActionPill = ({ children, icon: Icon, onClick }) => (
 export default function InfraDashboard() {
   const [activeTab, setActiveTab] = useState("Overview");
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [selectedAsset, setSelectedAsset] = useState(null);
   const [showProvisionModal, setShowProvisionModal] = useState(false);
   const [showMentorshipModal, setShowMentorshipModal] = useState(false);
   const [alertsShown, setAlertsShown] = useState({});
@@ -140,6 +143,43 @@ export default function InfraDashboard() {
     "SLA Health",
     "Engineering",
   ];
+
+  // Check environment mutation
+  const checkEnvironment = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/check-env");
+      if (!response.ok) throw new Error("Failed to check environment");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      if (data.openai_configured) {
+        toast.success(`✅ ${data.message}\nKey: ${data.openai_key_preview}`);
+      } else {
+        toast.error(`❌ ${data.message}`);
+      }
+      console.log("Environment check:", data);
+    },
+    onError: (error) => {
+      toast.error(`Environment check failed: ${error.message}`);
+    },
+  });
+
+  // Seed database mutation
+  const seedDatabase = useMutation({
+    mutationFn: async () => {
+      const response = await fetch("/api/seed", { method: "POST" });
+      if (!response.ok) throw new Error("Failed to seed database");
+      return response.json();
+    },
+    onSuccess: (data) => {
+      toast.success(data.message);
+      // Refresh all queries
+      queryClient.invalidateQueries();
+    },
+    onError: (error) => {
+      toast.error(error.message);
+    },
+  });
 
   // Fetch infrastructure assets
   const { data: infrastructureData } = useQuery({
@@ -283,6 +323,24 @@ export default function InfraDashboard() {
               <Sparkles size={16} />
               AI Assistant
             </button>
+            {/* Check API Key Button */}
+            <button
+              onClick={() => checkEnvironment.mutate()}
+              disabled={checkEnvironment.isPending}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-purple-50 text-purple-600 rounded-full text-sm font-medium hover:bg-purple-100 transition-colors disabled:opacity-50"
+            >
+              <ShieldCheck size={16} />
+              {checkEnvironment.isPending ? "Checking..." : "Check API Key"}
+            </button>
+            {/* Seed Database Button */}
+            <button
+              onClick={() => seedDatabase.mutate()}
+              disabled={seedDatabase.isPending}
+              className="hidden md:flex items-center gap-2 px-3 py-1.5 bg-green-50 text-green-600 rounded-full text-sm font-medium hover:bg-green-100 transition-colors disabled:opacity-50"
+            >
+              <Database size={16} />
+              {seedDatabase.isPending ? "Seeding..." : "Seed Data"}
+            </button>
             {/* Smart Alerts Button */}
             <button
               onClick={() => setShowSmartAlerts(true)}
@@ -412,7 +470,8 @@ export default function InfraDashboard() {
                 {systemHealth.map((system) => (
                   <div
                     key={system.id}
-                    className="bg-white border border-gray-200 rounded-xl p-6 hover:bg-gray-50 transition-colors"
+                    onClick={() => setSelectedAsset(system)}
+                    className="bg-white border border-gray-200 rounded-xl p-6 hover:bg-gray-50 transition-colors cursor-pointer"
                   >
                     <div className="flex items-start justify-between mb-4">
                       <div className="p-2.5 bg-gray-50 border border-gray-200 rounded-lg">
@@ -478,7 +537,8 @@ export default function InfraDashboard() {
                   activeTickets.map((ticket) => (
                     <div
                       key={ticket.id}
-                      className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group"
+                      onClick={() => setSelectedTicket(ticket)}
+                      className="p-4 hover:bg-gray-50 transition-colors flex items-center justify-between group cursor-pointer"
                     >
                       <div className="flex items-center gap-4">
                         <div className="text-xs font-mono text-gray-400 w-16">
@@ -686,12 +746,27 @@ export default function InfraDashboard() {
         </div>
       </footer>
 
+      {/* All Modals */}
+      {selectedTicket && (
+        <TicketDetailModal
+          ticket={selectedTicket}
+          onClose={() => setSelectedTicket(null)}
+        />
+      )}
+
+      {selectedAsset && (
+        <InfrastructureDetailModal
+          asset={selectedAsset}
+          onClose={() => setSelectedAsset(null)}
+        />
+      )}
+
       {/* All AI Modals */}
       {showAIChat && (
         <AIInfrastructureChat onClose={() => setShowAIChat(false)} />
       )}
-      {showMentorBot && (
-        <MentorBotModal onClose={() => setShowMentorBot(false)} />
+      {showMentorshipModal && (
+        <MentorBotModal onClose={() => setShowMentorshipModal(false)} />
       )}
       {showPredictiveMaintenance && (
         <PredictiveMaintenanceModal

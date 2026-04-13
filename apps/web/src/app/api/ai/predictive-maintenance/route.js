@@ -2,6 +2,17 @@ import sql from "@/app/api/utils/sql";
 
 export async function POST(request) {
   try {
+    // Check for API key
+    if (!process.env.OPENAI_API_KEY) {
+      return Response.json(
+        {
+          error:
+            "OpenAI API key not configured. Please add OPENAI_API_KEY to your environment variables.",
+        },
+        { status: 500 },
+      );
+    }
+
     // Fetch infrastructure assets and their metrics
     const assets = await sql`
       SELECT * FROM infrastructure_assets 
